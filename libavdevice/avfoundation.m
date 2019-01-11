@@ -865,6 +865,7 @@ static int avf_read_header(AVFormatContext *s)
         goto fail;
     }
     if (audio_device && add_audio_device(s, audio_device)) {
+      goto fail;
     }
 
     [ctx->capture_session startRunning];
