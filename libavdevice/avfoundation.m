@@ -136,6 +136,9 @@ typedef struct
     AVCaptureDeviceTransportControlsPlaybackMode observed_mode;
 #endif
     int                      observed_quit;
+
+    CFMutableArrayRef           current_audio_frames;
+
 } AVFContext;
 
 static void lock_frames(AVFContext* ctx)
@@ -261,6 +264,7 @@ static void unlock_frames(AVFContext* ctx)
 {
     if (self = [super init]) {
         _context = context;
+	_context->current_audio_frames = CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks);
     }
     return self;
 }
@@ -271,11 +275,7 @@ static void unlock_frames(AVFContext* ctx)
 {
     lock_frames(_context);
 
-    if (_context->current_audio_frame != nil) {
-        CFRelease(_context->current_audio_frame);
-    }
-
-    _context->current_audio_frame = (CMSampleBufferRef)CFRetain(audioFrame);
+    CFArrayAppendValue(_context->current_audio_frames, (CMSampleBufferRef)CFRetain(audioFrame));
 
     unlock_frames(_context);
 
@@ -283,6 +283,27 @@ static void unlock_frames(AVFContext* ctx)
 }
 
 @end
+
+static void pop_audio_frame(AVFContext *ctx)
+{
+  if (ctx->current_audio_frame == nil) {
+    if (ctx->current_audio_frames != nil && CFArrayGetCount(ctx->current_audio_frames) > 0) {
+      ctx->current_audio_frame = (CMSampleBufferRef)CFArrayGetValueAtIndex(ctx->current_audio_frames, 0);
+      CFArrayRemoveValueAtIndex(ctx->current_audio_frames, 0);
+    }
+  }
+}
+
+static void clear_audio_frames(AVFContext *ctx)
+{
+  if (ctx->current_audio_frames == nil) {
+    return;
+  }
+  for (int i = 0;i < CFArrayGetCount(ctx->current_audio_frames);++i) {
+    CFRelease(CFArrayGetValueAtIndex(ctx->current_audio_frames, i));
+  }
+  CFArrayRemoveAllValues(ctx->current_audio_frames);
+}
 
 static void destroy_context(AVFContext* ctx)
 {
@@ -306,6 +327,13 @@ static void destroy_context(AVFContext* ctx)
 
     if (ctx->current_frame) {
         CFRelease(ctx->current_frame);
+    }
+    if (ctx->current_audio_frame) {
+      CFRelease(ctx->current_audio_frame);
+    }
+    clear_audio_frames(ctx);
+    if (ctx->current_audio_frames) {
+      CFRelease(ctx->current_audio_frames);
     }
 }
 
@@ -690,6 +718,7 @@ static int get_audio_config(AVFormatContext *s)
 
     avpriv_set_pts_info(stream, 64, 1, avf_time_base);
 
+    pop_audio_frame(ctx);
     format_desc = CMSampleBufferGetFormatDescription(ctx->current_audio_frame);
     const AudioStreamBasicDescription *basic_desc = CMAudioFormatDescriptionGetStreamBasicDescription(format_desc);
 
@@ -1056,6 +1085,9 @@ static int avf_read_packet(AVFormatContext *s, AVPacket *pkt)
         CMBlockBufferRef block_buffer;
         lock_frames(ctx);
 
+	pop_audio_frame(ctx);
+        image_buffer = CMSampleBufferGetImageBuffer(ctx->current_frame);
+
         if (ctx->current_frame != nil) {
             int status;
             int length = 0;
@@ -1217,7 +1249,7 @@ static const AVClass avf_class = {
 
 AVInputFormat ff_avfoundation_demuxer = {
     .name           = "avfoundation",
-    .long_name      = NULL_IF_CONFIG_SMALL("AVFoundation input device"),
+libavdevice/avfoundation.m    .long_name      = NULL_IF_CONFIG_SMALL("AVFoundation input device"),
     .priv_data_size = sizeof(AVFContext),
     .read_header    = avf_read_header,
     .read_packet    = avf_read_packet,
