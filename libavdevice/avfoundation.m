@@ -218,7 +218,9 @@ static void unlock_frames(AVFContext* ctx)
 {
     lock_frames(_context);
 
-    CFArrayAppendValue(_context->current_audio_frames, (CMSampleBufferRef)CFRetain(audioFrame));
+    if (_context->current_audio_frames) {
+      CFArrayAppendValue(_context->current_audio_frames, (CMSampleBufferRef)CFRetain(audioFrame));
+    }
 
     pthread_cond_signal(&_context->frame_wait_cond);
 
@@ -277,7 +279,9 @@ static void destroy_context(AVFContext* ctx)
     if (ctx->current_audio_frame) {
       CFRelease(ctx->current_audio_frame);
     }
+
     clear_audio_frames(ctx);
+
     if (ctx->current_audio_frames) {
       CFRelease(ctx->current_audio_frames);
     }
@@ -1081,7 +1085,24 @@ static int avf_read_packet(AVFormatContext *s, AVPacket *pkt)
 static int avf_close(AVFormatContext *s)
 {
     AVFContext* ctx = (AVFContext*)s->priv_data;
+
+    // according to some unknown reason, retained buffer makes some trouble after re-opening audio device.
+    lock_frames(ctx);
+
+    if (ctx->current_audio_frame) {
+      CFRelease(ctx->current_audio_frame);
+      ctx->current_audio_frame = nil;
+    }
+    clear_audio_frames(ctx);
+    if (ctx->current_audio_frames) {
+      CFRelease(ctx->current_audio_frames);
+      ctx->current_audio_frames = nil;
+    }
+
+    unlock_frames(ctx);
+
     destroy_context(ctx);
+
     return 0;
 }
 
