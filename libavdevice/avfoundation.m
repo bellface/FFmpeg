@@ -578,7 +578,12 @@ static int get_video_config(AVFormatContext *s)
     }
 
     // Take stream info from the first frame.
+    int64_t time_s = av_gettime();
     while (ctx->frames_captured < 1) {
+	if (av_gettime() - time_s > 1000000) {
+	  av_log(s, AV_LOG_ERROR, "capture session may not be running");
+	  return 1;
+	}
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, YES);
     }
 
