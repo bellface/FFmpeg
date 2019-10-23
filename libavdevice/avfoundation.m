@@ -579,8 +579,13 @@ static int get_video_config(AVFormatContext *s)
 
     // Take stream info from the first frame.
     int64_t time_s = av_gettime();
+    int64_t waittime = 1000000;
+    char *env_waittime = getenv("AV_CAPTUREDEVICE_WAITTIME");
+    if (env_waittime != NULL) {
+      waittime = atol(env_waittime);
+    }
     while (ctx->frames_captured < 1) {
-	if (av_gettime() - time_s > 1000000) {
+	if (av_gettime() - time_s > waittime) {
 	  av_log(s, AV_LOG_ERROR, "capture session may not be running");
 	  return 1;
 	}
