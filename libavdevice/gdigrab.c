@@ -34,6 +34,21 @@
 #include "libavutil/time.h"
 #include <windows.h>
 
+static HANDLE hInstance = NULL;
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+  switch(fdwReason) {
+  case DLL_PROCESS_ATTACH:
+    hInstance = hinstDLL;
+    break;
+  }
+  return TRUE;
+}
+
+
 /**
  * GDI Device Demuxer context
  */
@@ -64,6 +79,11 @@ struct gdigrab {
     HWND       region_hwnd; /**< Handle of the region border window */
 
     int cursor_error_printed;
+
+  HWND disp_hwnd;
+  HDC disp_hdc;
+  HWND source_child_hwnd;
+  HDC source_child_hdc;
 };
 
 #define WIN32_API_ERROR(str)                                            \
@@ -212,6 +232,142 @@ gdigrab_region_wnd_update(AVFormatContext *s1, struct gdigrab *gdigrab)
     }
 }
 
+#define TEST_DISPLAY_WINDOW_CLASS_NAME "TestDisplayWindow"
+
+static LRESULT CALLBACK
+gdigrab_disp_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    PAINTSTRUCT ps;
+    HDC hdc;
+    RECT rect;
+    struct gdigrab *gdigrab = GetWindowLongPtr(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_CREATE:
+      break;
+    case WM_PAINT:
+      if (gdigrab != NULL) {
+	hdc = BeginPaint(hwnd, &ps);
+	RECT clip_rect = gdigrab->clip_rect;
+	int width = clip_rect.right - clip_rect.left;
+	int height = clip_rect.bottom - clip_rect.top;
+
+	/* BitBlt(gdigrab->disp_hdc,  */
+	/*        0,0,  */
+	/*        width, */
+	/*        height, */
+	/*        // gdigrab->dest_hdc,  */
+	/*        gdigrab->source_hdc, // from window */
+	/*        0,0, */
+	/*        SRCCOPY | CAPTUREBLT); */
+	
+	SetStretchBltMode(gdigrab->disp_hdc, HALFTONE);
+	StretchBlt(gdigrab->disp_hdc,
+		   0,0,
+		   width / 2,
+		   height / 2,
+		   // gdigrab->dest_hdc,
+		   gdigrab->source_hdc, // from window
+		   // gdigrab->source_child_hdc, // from window
+		   0,0,
+		   width,
+		   height,
+		   SRCCOPY | CAPTUREBLT);
+	EndPaint(hwnd, &ps);
+      } else {
+        return DefWindowProc(hwnd, msg, wparam, lparam);
+      }
+        break;
+    default:
+        return DefWindowProc(hwnd, msg, wparam, lparam);
+    }
+    return 0;
+}
+
+static BOOL CALLBACK enumChildProc(HWND hwnd, LPARAM lParam)
+{
+  char buf[256];
+  GetWindowTextA(hwnd, buf, sizeof(buf));
+  av_log(NULL, AV_LOG_ERROR, "found window: %s\n", buf);
+  return TRUE;
+}
+
+static int
+gdigrap_disp_window(AVFormatContext *s1)
+{
+  struct gdigrab *gdigrab = s1->priv_data;
+  RECT clip_rect = gdigrab->clip_rect;
+  int width = clip_rect.right - clip_rect.left;
+  int height = clip_rect.bottom - clip_rect.top;
+  
+  if (gdigrab->disp_hwnd == NULL) {
+    // register window class
+    WNDCLASSEX wcex;
+
+    wcex.cbSize = sizeof(WNDCLASSEX);
+
+    wcex.style            = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc    = gdigrab_disp_window_proc;
+    wcex.cbClsExtra        = 0;
+    wcex.cbWndExtra        = 0;
+    wcex.hInstance        = hInstance;
+    wcex.hIcon            = NULL;
+    wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    wcex.hbrBackground    = (HBRUSH)(COLOR_WINDOW+1);
+    wcex.lpszMenuName    = NULL;
+    wcex.lpszClassName    = TEST_DISPLAY_WINDOW_CLASS_NAME;
+    wcex.hIconSm        = NULL;
+
+    if (RegisterClassEx(&wcex) == 0) {
+      WIN32_API_ERROR("failed to create window class");
+      return -1;
+    }
+
+    HWND hwnd = CreateWindow(TEST_DISPLAY_WINDOW_CLASS_NAME,
+			       "Image",
+			       WS_BORDER | WS_CAPTION | WS_VISIBLE,
+			       0, 0,
+			       width / 2,
+			       height / 2,
+			       NULL,
+			       NULL,
+			       hInstance,
+			       NULL);
+
+
+    if (hwnd == NULL) {
+      WIN32_API_ERROR("failed to create window");
+      return -1;
+    }
+
+    av_log(s1, AV_LOG_ERROR, "width: %d, height: %d",
+	   width,
+	   height);
+    
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, gdigrab);
+
+    gdigrab->disp_hwnd = hwnd;
+    gdigrab->disp_hdc = GetDC(gdigrab->disp_hwnd);
+
+
+    EnumChildWindows(gdigrab->hwnd, enumChildProc, gdigrab);
+    
+    gdigrab->source_child_hwnd = GetWindow(gdigrab->hwnd, GW_CHILD);
+    gdigrab->source_child_hdc = GetDC(gdigrab->source_child_hwnd);
+
+  }
+
+  //  InvalidateRect(gdigrab->hwnd, NULL, FALSE);
+  InvalidateRect(gdigrab->disp_hwnd, NULL, FALSE);
+
+  MSG msg;
+  if (GetMessage(&msg, NULL, 0, 0)) {
+    DispatchMessage(&msg);
+  }
+  
+  return 0;
+}
+
 /**
  * Initializes the gdi grab device demuxer (public device demuxer API).
  *
@@ -269,7 +425,9 @@ gdigrab_read_header(AVFormatContext *s1)
 
     /* This will get the device context for the selected window, or if
      * none, the primary screen */
-    source_hdc = GetDC(hwnd);
+    //      source_hdc = GetDC(hwnd);
+    source_hdc = GetWindowDC(hwnd);
+    
     if (!source_hdc) {
         WIN32_API_ERROR("Couldn't get window device context");
         ret = AVERROR(EIO);
@@ -400,6 +558,8 @@ gdigrab_read_header(AVFormatContext *s1)
 
     gdigrab->cursor_error_printed = 0;
 
+    gdigrab->disp_hwnd = NULL;
+    
     if (gdigrab->show_region) {
         if (gdigrab_region_wnd_init(s1, gdigrab)) {
             ret = AVERROR(EIO);
@@ -570,7 +730,7 @@ static int gdigrab_read_packet(AVFormatContext *s1, AVPacket *pkt)
                 source_hdc,
                 clip_rect.left, clip_rect.top, SRCCOPY | CAPTUREBLT)) {
         // comment out error message to avoid logging flood.
-        //WIN32_API_ERROR("Failed to capture image");
+        // WIN32_API_ERROR("Failed to capture image");
         av_free_packet(pkt); // to avoid memory leak
         return AVERROR(EIO);
     }
@@ -597,6 +757,8 @@ static int gdigrab_read_packet(AVFormatContext *s1, AVPacket *pkt)
 
     gdigrab->time_frame = time_frame;
 
+    gdigrap_disp_window(s1);
+      
     return gdigrab->header_size + gdigrab->frame_size;
 }
 
