@@ -3637,6 +3637,9 @@ enable $EXTRALIBS_LIST
 # Avoid external, non-system, libraries getting enabled by dependency resolution
 disable $EXTERNAL_LIBRARY_LIST $HWACCEL_LIBRARY_LIST
 
+# disabled by default
+disable wrtcapture_indev
+
 # build settings
 SHFLAGS='-shared -Wl,-soname,$$(@F)'
 LIBPREF="lib"
