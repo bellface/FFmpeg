@@ -3262,8 +3262,8 @@ fbdev_outdev_deps="linux_fb_h"
 gdigrab_indev_deps="CreateDIBSection"
 gdigrab_indev_extralibs="-lgdi32"
 gdigrab_indev_select="bmp_decoder"
-wrtcapture_indev_deps="CreateDIBSection"
-wrtcapture_indev_extralibs="-lgdi32"
+wrtcapture_indev_deps="wrtwincapt_open"
+wrtcapture_indev_extralibs="-llibwrtcapture"
 wrtcapture_indev_select="bmp_decoder"
 iec61883_indev_deps="libiec61883"
 jack_indev_deps="libjack"
@@ -6375,7 +6375,10 @@ if enabled libxcb; then
 fi
 
 check_func_headers "windows.h" CreateDIBSection "$gdigrab_indev_extralibs"
-check_func_headers "windows.h" CreateDIBSection "$wrtcapture_indev_extralibs"
+
+if enabled wrtcapture_indev;then
+    check_func_headers "wrtcapture.h" wrtwincapt_open "$wrtcapture_indev_extralibs"
+fi
 
 # d3d11va requires linking directly to dxgi and d3d11 if not building for
 # the desktop api partition
