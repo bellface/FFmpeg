@@ -60,9 +60,6 @@ dshow_read_close(AVFormatContext *s)
     struct dshow_ctx *ctx = s->priv_data;
     AVPacketList *pktl;
 
-    if (ctx->mutex) {
-        WaitForSingleObject(ctx->mutex, INFINITE);
-    }
     if (ctx->control) {
         IMediaControl_Stop(ctx->control);
         IMediaControl_Release(ctx->control);
@@ -126,17 +123,17 @@ dshow_read_close(AVFormatContext *s)
         int rv = CloseHandle(ctx->event[1]);
 	av_log(s, AV_LOG_INFO, "event[1]: CloseHandle(): %d\n", rv);
     }
-    if(ctx->mutex) {
-        ReleaseMutex(ctx->mutex);
-        CloseHandle(ctx->mutex);
-    }
-
     pktl = ctx->pktl;
     while (pktl) {
         AVPacketList *next = pktl->next;
         av_packet_unref(&pktl->pkt);
         av_free(pktl);
         pktl = next;
+    }
+
+    if(ctx->mutex) {
+        ReleaseMutex(ctx->mutex);
+        CloseHandle(ctx->mutex);
     }
 
     CoUninitialize();
