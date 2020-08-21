@@ -60,13 +60,19 @@ dshow_read_close(AVFormatContext *s)
     struct dshow_ctx *ctx = s->priv_data;
     AVPacketList *pktl;
 
+    if (ctx->mutex) {
+        WaitForSingleObject(ctx->mutex, INFINITE);
+    }
     if (ctx->control) {
         IMediaControl_Stop(ctx->control);
         IMediaControl_Release(ctx->control);
     }
+    ctx->control = NULL;
 
     if (ctx->media_event)
         IMediaEvent_Release(ctx->media_event);
+    ctx->eof = 1;
+    ctx->media_event = NULL;
 
     if (ctx->graph) {
         IEnumFilters *fenum;
@@ -85,6 +91,7 @@ dshow_read_close(AVFormatContext *s)
         }
         IGraphBuilder_Release(ctx->graph);
     }
+    ctx->graph = NULL;
 
     if (ctx->capture_pin[VideoDevice])
         libAVPin_Release(ctx->capture_pin[VideoDevice]);
@@ -109,12 +116,20 @@ dshow_read_close(AVFormatContext *s)
     av_freep(&ctx->device_unique_name[0]);
     av_freep(&ctx->device_unique_name[1]);
 
-    if(ctx->mutex)
+    if(ctx->event[0]) {
+      SetEvent(ctx->event[0]);
+        int rv = CloseHandle(ctx->event[0]);
+        av_log(s, AV_LOG_INFO, "event[0]: CloseHandle(): %d\n", rv);
+    }
+    if(ctx->event[1]) {
+      SetEvent(ctx->event[1]);
+        int rv = CloseHandle(ctx->event[1]);
+	av_log(s, AV_LOG_INFO, "event[1]: CloseHandle(): %d\n", rv);
+    }
+    if(ctx->mutex) {
+        ReleaseMutex(ctx->mutex);
         CloseHandle(ctx->mutex);
-    if(ctx->event[0])
-        CloseHandle(ctx->event[0]);
-    if(ctx->event[1])
-        CloseHandle(ctx->event[1]);
+    }
 
     pktl = ctx->pktl;
     while (pktl) {
@@ -1276,6 +1291,7 @@ static int dshow_read_packet(AVFormatContext *s, AVPacket *pkt)
         ResetEvent(ctx->event[1]);
         ReleaseMutex(ctx->mutex);
         if (!pktl) {
+	  if (ctx->media_event) {
             if (dshow_check_event_queue(ctx->media_event) < 0) {
                 ctx->eof = 1;
             } else if (s->flags & AVFMT_FLAG_NONBLOCK) {
@@ -1283,6 +1299,7 @@ static int dshow_read_packet(AVFormatContext *s, AVPacket *pkt)
             } else {
                 WaitForMultipleObjects(2, ctx->event, 0, INFINITE);
             }
+	  }
         }
     }
 
