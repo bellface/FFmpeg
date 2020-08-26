@@ -64,6 +64,12 @@ enum {
 unsigned av_buffersrc_get_nb_failed_requests(AVFilterContext *buffer_src);
 
 /**
+ * Get the size of fifo.
+ * return negative if error.
+ */
+int av_buffersrc_get_fifo_size(AVFilterContext *buffer_src);
+
+/**
  * This structure contains the parameters describing the frames that will be
  * passed to this filter.
  *

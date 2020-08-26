@@ -390,6 +390,16 @@ static av_cold void uninit(AVFilterContext *ctx)
     av_fifo_freep(&s->fifo);
 }
 
+int av_buffersrc_get_fifo_size(AVFilterContext *ctx)
+{
+  BufferSourceContext *s = ctx->priv;
+  int rv = 0;
+  if (s->fifo) {
+    rv = av_fifo_size(s->fifo);
+  }
+  return rv;
+}
+
 static int query_formats(AVFilterContext *ctx)
 {
     BufferSourceContext *c = ctx->priv;
