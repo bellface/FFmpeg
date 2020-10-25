@@ -24,7 +24,11 @@
 #include "avassert.h"
 #include "mem.h"
 
+#ifdef DEBUGHEAP
+static inline int ff_fast_malloc(void *ptr, unsigned int *size, size_t min_size, int zero_realloc, const char *file, int line)
+#else
 static inline int ff_fast_malloc(void *ptr, unsigned int *size, size_t min_size, int zero_realloc)
+#endif
 {
     void *val;
 
@@ -35,7 +39,11 @@ static inline int ff_fast_malloc(void *ptr, unsigned int *size, size_t min_size,
     }
     min_size = FFMAX(min_size + min_size / 16 + 32, min_size);
     av_freep(ptr);
+#ifdef DEBUGHEAP
+    val = zero_realloc ? DEBUGHEAP_PREFIX(av_mallocz)(min_size, file, line) : DEBUGHEAP_PREFIX(av_malloc)(min_size, file, line);
+#else
     val = zero_realloc ? av_mallocz(min_size) : av_malloc(min_size);
+#endif
     memcpy(ptr, &val, sizeof(val));
     if (!val)
         min_size = 0;

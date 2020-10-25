@@ -34,6 +34,19 @@
 #include "error.h"
 #include "avutil.h"
 
+#define DEBUGHEAP
+
+#ifdef DEBUGHEAP
+typedef struct memheader {
+  const char *function;
+  const char *file;
+  long line;
+  long size;
+  struct memheader *next;
+  struct memheader *prev;
+} memheadertype;
+#endif
+
 /**
  * @addtogroup lavu_mem
  * Utilities for manipulating memory.
@@ -172,6 +185,16 @@
 /**
  * @}
  */
+  
+#ifdef DEBUGHEAP
+#define DEBUGHEAP_PREFIX_SYM av_DH_
+#define DEBUGHEAP_PREFIX(X) av_DH_##X
+#define DEBUGHEAP_ARG ,const char* file, int line
+#define DEF_DEBUGFUNC(X,...) av_DH_##X(__VA_ARGS__, __FILE__, __LINE__)
+#else
+#define DEBUGHEAP_PREFIX(X) X
+#define DEBUGHEAP_ARG
+#endif
 
 /**
  * @defgroup lavu_mem_funcs Heap Management
@@ -193,7 +216,7 @@
  *         be allocated
  * @see av_mallocz()
  */
-void *av_malloc(size_t size) av_malloc_attrib av_alloc_size(1);
+void *DEBUGHEAP_PREFIX(av_malloc)(size_t size DEBUGHEAP_ARG) av_malloc_attrib av_alloc_size(1);
 
 /**
  * Allocate a memory block with alignment suitable for all memory accesses
@@ -204,7 +227,7 @@ void *av_malloc(size_t size) av_malloc_attrib av_alloc_size(1);
  * @return Pointer to the allocated block, or `NULL` if it cannot be allocated
  * @see av_malloc()
  */
-void *av_mallocz(size_t size) av_malloc_attrib av_alloc_size(1);
+void *DEBUGHEAP_PREFIX(av_mallocz)(size_t size DEBUGHEAP_ARG) av_malloc_attrib av_alloc_size(1);
 
 /**
  * Allocate a memory block for an array with av_malloc().
@@ -217,7 +240,7 @@ void *av_mallocz(size_t size) av_malloc_attrib av_alloc_size(1);
  *         be allocated
  * @see av_malloc()
  */
-av_alloc_size(1, 2) void *av_malloc_array(size_t nmemb, size_t size);
+av_alloc_size(1, 2) void *DEBUGHEAP_PREFIX(av_malloc_array)(size_t nmemb, size_t size DEBUGHEAP_ARG);
 
 /**
  * Allocate a memory block for an array with av_mallocz().
@@ -232,14 +255,14 @@ av_alloc_size(1, 2) void *av_malloc_array(size_t nmemb, size_t size);
  * @see av_mallocz()
  * @see av_malloc_array()
  */
-av_alloc_size(1, 2) void *av_mallocz_array(size_t nmemb, size_t size);
+av_alloc_size(1, 2) void *DEBUGHEAP_PREFIX(av_mallocz_array)(size_t nmemb, size_t size DEBUGHEAP_ARG);
 
 /**
  * Non-inlined equivalent of av_mallocz_array().
  *
  * Created for symmetry with the calloc() C function.
  */
-void *av_calloc(size_t nmemb, size_t size) av_malloc_attrib;
+void *DEBUGHEAP_PREFIX(av_calloc)(size_t nmemb, size_t size DEBUGHEAP_ARG) av_malloc_attrib;
 
 /**
  * Allocate, reallocate, or free a block of memory.
@@ -261,7 +284,7 @@ void *av_calloc(size_t nmemb, size_t size) av_malloc_attrib;
  * @see av_fast_realloc()
  * @see av_reallocp()
  */
-void *av_realloc(void *ptr, size_t size) av_alloc_size(2);
+void *DEBUGHEAP_PREFIX(av_realloc)(void *ptr, size_t size DEBUGHEAP_ARG) av_alloc_size(2);
 
 /**
  * Allocate, reallocate, or free a block of memory through a pointer to a
@@ -283,7 +306,7 @@ void *av_realloc(void *ptr, size_t size) av_alloc_size(2);
  *          correctly aligned.
  */
 av_warn_unused_result
-int av_reallocp(void *ptr, size_t size);
+int DEBUGHEAP_PREFIX(av_reallocp)(void *ptr, size_t size DEBUGHEAP_ARG);
 
 /**
  * Allocate, reallocate, or free a block of memory.
@@ -300,7 +323,7 @@ int av_reallocp(void *ptr, size_t size);
  *   @endcode
  *   pattern.
  */
-void *av_realloc_f(void *ptr, size_t nelem, size_t elsize);
+void *DEBUGHEAP_PREFIX(av_realloc_f)(void *ptr, size_t nelem, size_t elsize DEBUGHEAP_ARG);
 
 /**
  * Allocate, reallocate, or free an array.
@@ -320,7 +343,7 @@ void *av_realloc_f(void *ptr, size_t nelem, size_t elsize);
  *          correctly aligned.
  * @see av_reallocp_array()
  */
-av_alloc_size(2, 3) void *av_realloc_array(void *ptr, size_t nmemb, size_t size);
+av_alloc_size(2, 3) void *DEBUGHEAP_PREFIX(av_realloc_array)(void *ptr, size_t nmemb, size_t size DEBUGHEAP_ARG);
 
 /**
  * Allocate, reallocate, or free an array through a pointer to a pointer.
@@ -339,7 +362,7 @@ av_alloc_size(2, 3) void *av_realloc_array(void *ptr, size_t nmemb, size_t size)
  * @warning Unlike av_malloc(), the allocated memory is not guaranteed to be
  *          correctly aligned.
  */
-int av_reallocp_array(void *ptr, size_t nmemb, size_t size);
+int DEBUGHEAP_PREFIX(av_reallocp_array)(void *ptr, size_t nmemb, size_t size DEBUGHEAP_ARG);
 
 /**
  * Reallocate the given buffer if it is not large enough, otherwise do nothing.
@@ -373,7 +396,7 @@ int av_reallocp_array(void *ptr, size_t nmemb, size_t size);
  * @see av_realloc()
  * @see av_fast_malloc()
  */
-void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size);
+void *DEBUGHEAP_PREFIX(av_fast_realloc)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG);
 
 /**
  * Allocate a buffer, reusing the given one if large enough.
@@ -404,7 +427,7 @@ void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size);
  * @see av_realloc()
  * @see av_fast_mallocz()
  */
-void av_fast_malloc(void *ptr, unsigned int *size, size_t min_size);
+void DEBUGHEAP_PREFIX(av_fast_malloc)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG);
 
 /**
  * Allocate and clear a buffer, reusing the given one if large enough.
@@ -424,7 +447,7 @@ void av_fast_malloc(void *ptr, unsigned int *size, size_t min_size);
  * @param[in]     min_size Desired minimal size of buffer `*ptr`
  * @see av_fast_malloc()
  */
-void av_fast_mallocz(void *ptr, unsigned int *size, size_t min_size);
+void DEBUGHEAP_PREFIX(av_fast_mallocz)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG);
 
 /**
  * Free a memory block which has been allocated with a function of av_malloc()
@@ -470,7 +493,7 @@ void av_freep(void *ptr);
  *         copy of `s` or `NULL` if the string cannot be allocated
  * @see av_strndup()
  */
-char *av_strdup(const char *s) av_malloc_attrib;
+char *DEBUGHEAP_PREFIX(av_strdup)(const char *s DEBUGHEAP_ARG) av_malloc_attrib;
 
 /**
  * Duplicate a substring of a string.
@@ -481,7 +504,7 @@ char *av_strdup(const char *s) av_malloc_attrib;
  * @return Pointer to a newly-allocated string containing a
  *         substring of `s` or `NULL` if the string cannot be allocated
  */
-char *av_strndup(const char *s, size_t len) av_malloc_attrib;
+char *DEBUGHEAP_PREFIX(av_strndup)(const char *s, size_t len DEBUGHEAP_ARG) av_malloc_attrib;
 
 /**
  * Duplicate a buffer with av_malloc().
@@ -491,7 +514,7 @@ char *av_strndup(const char *s, size_t len) av_malloc_attrib;
  * @return Pointer to a newly allocated buffer containing a
  *         copy of `p` or `NULL` if the buffer cannot be allocated
  */
-void *av_memdup(const void *p, size_t size);
+void *DEBUGHEAP_PREFIX(av_memdup)(const void *p, size_t size DEBUGHEAP_ARG);
 
 /**
  * Overlapping memcpy() implementation.
@@ -606,7 +629,7 @@ void av_memcpy_backptr(uint8_t *dst, int back, int cnt);
  * @param[in]     elem    Element to add
  * @see av_dynarray_add_nofree(), av_dynarray2_add()
  */
-void av_dynarray_add(void *tab_ptr, int *nb_ptr, void *elem);
+void DEBUGHEAP_PREFIX(av_dynarray_add)(void *tab_ptr, int *nb_ptr, void *elem DEBUGHEAP_ARG);
 
 /**
  * Add an element to a dynamic array.
@@ -619,7 +642,7 @@ void av_dynarray_add(void *tab_ptr, int *nb_ptr, void *elem);
  * @see av_dynarray_add(), av_dynarray2_add()
  */
 av_warn_unused_result
-int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem);
+int DEBUGHEAP_PREFIX(av_dynarray_add_nofree)(void *tab_ptr, int *nb_ptr, void *elem DEBUGHEAP_ARG);
 
 /**
  * Add an element of size `elem_size` to a dynamic array.
@@ -644,8 +667,8 @@ int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem);
  *         space
  * @see av_dynarray_add(), av_dynarray_add_nofree()
  */
-void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size,
-                       const uint8_t *elem_data);
+void *DEBUGHEAP_PREFIX(av_dynarray2_add)(void **tab_ptr, int *nb_ptr, size_t elem_size,
+                       const uint8_t *elem_data DEBUGHEAP_ARG);
 
 /**
  * @}
@@ -690,11 +713,35 @@ static inline int av_size_mult(size_t a, size_t b, size_t *r)
  * @warning Exercise extreme caution when using this function. Don't touch
  *          this if you do not understand the full consequence of doing so.
  */
-void av_max_alloc(size_t max);
+void DEBUGHEAP_PREFIX(av_max_alloc)(size_t max DEBUGHEAP_ARG);
 
 /**
  * @}
  * @}
  */
+#ifdef DEBUGHEAP
+#define av_malloc(X) DEF_DEBUGFUNC(av_malloc,X)
+#define av_mallocz(X) DEF_DEBUGFUNC(av_mallocz,X)
+#define av_malloc_array(X,Y) DEF_DEBUGFUNC(av_malloc_array,X,Y)
+#define av_mallocz_array(X,Y) DEF_DEBUGFUNC(av_mallocz_array,X,Y)
+#define av_calloc(X,Y) DEF_DEBUGFUNC(av_calloc,X,Y)
+#define av_realloc(X,Y) DEF_DEBUGFUNC(av_realloc,X,Y)
+#define av_reallocp(X,Y) DEF_DEBUGFUNC(av_reallocp,X,Y)
+#define av_realloc_f(X,Y,Z) DEF_DEBUGFUNC(av_realloc_f,X,Y,Z)
+#define av_realloc_array(X,Y,Z) DEF_DEBUGFUNC(av_realloc_array,X,Y,Z)
+#define av_reallocp_array(X,Y,Z) DEF_DEBUGFUNC(av_reallocp_array,X,Y,Z)
+#define av_fast_realloc(X,Y,Z) DEF_DEBUGFUNC(av_fast_realloc,X,Y,Z)
+#define av_fast_malloc(X,Y,Z) DEF_DEBUGFUNC(av_fast_malloc,X,Y,Z)
+#define av_fast_mallocz(X,Y,Z) DEF_DEBUGFUNC(av_fast_mallocz,X,Y,Z)
+#define av_strdup(X) DEF_DEBUGFUNC(av_strdup,X)
+#define av_strndup(X,Y) DEF_DEBUGFUNC(av_strndup,X,Y)
+#define av_memdup(X,Y) DEF_DEBUGFUNC(av_memdup,X,Y)
+#define av_dynarray_add(X,Y,Z) DEF_DEBUGFUNC(av_dynarray_add,X,Y,Z)
+#define av_dynarray_add_nofree(X,Y,Z) DEF_DEBUGFUNC(av_dynarray_add_nofree,X,Y,Z)
+#define av_dynarray2_add(W,X,Y,Z) DEF_DEBUGFUNC(av_dynarray2_add,W,X,Y,Z)
+#define av_max_alloc(X) DEF_DEBUGFUNC(av_max_alloc,X)
+
+void av_mem_traverse(void (*callback)(const char *file, int line, size_t size));
+#endif
 
 #endif /* AVUTIL_MEM_H */

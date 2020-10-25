@@ -42,6 +42,32 @@
  *                     array and size are not changed; the statement can end
  *                     with a return or a goto
  */
+#ifdef DEBUGHEAP
+#define FF_DYNARRAY_ADD(av_size_max, av_elt_size, av_array, av_size, \
+                        av_success, av_failure, file, line)		     \
+    do { \
+        size_t av_size_new = (av_size); \
+        if (!((av_size) & ((av_size) - 1))) { \
+            av_size_new = (av_size) ? (av_size) << 1 : 1; \
+            if (av_size_new > (av_size_max) / (av_elt_size)) { \
+                av_size_new = 0; \
+            } else { \
+                void *av_array_new = \
+		  av_DH_av_realloc((av_array), av_size_new * (av_elt_size), file, line); \
+                if (!av_array_new) \
+                    av_size_new = 0; \
+                else \
+                    (av_array) = av_array_new; \
+            } \
+        } \
+        if (av_size_new) { \
+            { av_success } \
+            (av_size)++; \
+        } else { \
+            av_failure \
+        } \
+    } while (0)
+#else
 #define FF_DYNARRAY_ADD(av_size_max, av_elt_size, av_array, av_size, \
                         av_success, av_failure) \
     do { \
@@ -66,5 +92,5 @@
             av_failure \
         } \
     } while (0)
-
+#endif
 #endif /* AVUTIL_DYNARRAY_H */
