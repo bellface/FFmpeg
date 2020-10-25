@@ -1280,7 +1280,7 @@ static const AVClass avf_class = {
 
 AVInputFormat ff_avfoundation_demuxer = {
     .name           = "avfoundation",
-libavdevice/avfoundation.m    .long_name      = NULL_IF_CONFIG_SMALL("AVFoundation input device"),
+    .long_name      = NULL_IF_CONFIG_SMALL("AVFoundation input device"),
     .priv_data_size = sizeof(AVFContext),
     .read_header    = avf_read_header,
     .read_packet    = avf_read_packet,
