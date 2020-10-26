@@ -45,6 +45,13 @@
 #include "internal.h"
 #include "thread.h"
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
+
 typedef struct FramePool {
     /**
      * Pools for each data plane. For audio all the planes have the same size,
@@ -1511,7 +1518,11 @@ static int update_frame_pool(AVCodecContext *avctx, AVFrame *frame)
                 pool->pools[i] = av_buffer_pool_init(size[i] + 16 + STRIDE_ALIGN - 1,
                                                      CONFIG_MEMORY_POISONING ?
                                                         NULL :
+#ifdef DEBUGHEAP
+                                                        local_av_buffer_allocz);
+#else
                                                         av_buffer_allocz);
+#endif
                 if (!pool->pools[i]) {
                     ret = AVERROR(ENOMEM);
                     goto fail;

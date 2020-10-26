@@ -47,6 +47,13 @@
 #include "rectangle.h"
 #include "thread.h"
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
+
 static const uint8_t field_scan[16+1] = {
     0 + 0 * 4, 0 + 1 * 4, 1 + 0 * 4, 0 + 2 * 4,
     0 + 3 * 4, 1 + 1 * 4, 1 + 2 * 4, 1 + 3 * 4,
@@ -165,12 +172,28 @@ static int init_table_pools(H264Context *h)
     const int b4_array_size = b4_stride * h->mb_height * 4;
 
     h->qscale_table_pool = av_buffer_pool_init(big_mb_num + h->mb_stride,
+#ifdef DEBUGHEAP
+                                               local_av_buffer_allocz);
+#else
                                                av_buffer_allocz);
+#endif
     h->mb_type_pool      = av_buffer_pool_init((big_mb_num + h->mb_stride) *
+#ifdef DEBUGHEAP
+                                               sizeof(uint32_t), local_av_buffer_allocz);
+#else
                                                sizeof(uint32_t), av_buffer_allocz);
+#endif
     h->motion_val_pool   = av_buffer_pool_init(2 * (b4_array_size + 4) *
+#ifdef DEBUGHEAP
+                                               sizeof(int16_t), local_av_buffer_allocz);
+#else
                                                sizeof(int16_t), av_buffer_allocz);
+#endif
+#ifdef DEBUGHEAP
+    h->ref_index_pool    = av_buffer_pool_init(4 * mb_array_size, local_av_buffer_allocz);
+#else
     h->ref_index_pool    = av_buffer_pool_init(4 * mb_array_size, av_buffer_allocz);
+#endif
 
     if (!h->qscale_table_pool || !h->mb_type_pool || !h->motion_val_pool ||
         !h->ref_index_pool) {

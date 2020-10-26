@@ -35,6 +35,12 @@
 
 #define BUFFER_ALIGN 32
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
 
 AVFrame *ff_null_get_video_buffer(AVFilterLink *link, int w, int h)
 {
@@ -65,7 +71,11 @@ AVFrame *ff_default_get_video_buffer(AVFilterLink *link, int w, int h)
     }
 
     if (!link->frame_pool) {
+#ifdef DEBUGHEAP
+        link->frame_pool = ff_frame_pool_video_init(local_av_buffer_allocz, w, h,
+#else
         link->frame_pool = ff_frame_pool_video_init(av_buffer_allocz, w, h,
+#endif
                                                     link->format, BUFFER_ALIGN);
         if (!link->frame_pool)
             return NULL;
@@ -80,7 +90,11 @@ AVFrame *ff_default_get_video_buffer(AVFilterLink *link, int w, int h)
             pool_format != link->format || pool_align != BUFFER_ALIGN) {
 
             ff_frame_pool_uninit((FFFramePool **)&link->frame_pool);
+#ifdef DEBUGHEAP
+            link->frame_pool = ff_frame_pool_video_init(local_av_buffer_allocz, w, h,
+#else
             link->frame_pool = ff_frame_pool_video_init(av_buffer_allocz, w, h,
+#endif
                                                         link->format, BUFFER_ALIGN);
             if (!link->frame_pool)
                 return NULL;

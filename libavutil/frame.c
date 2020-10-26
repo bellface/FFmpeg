@@ -186,10 +186,17 @@ static void wipe_side_data(AVFrame *frame)
 
     av_freep(&frame->side_data);
 }
-
+#ifdef DEBUGHEAP
+AVFrame *DEBUGHEAP_PREFIX(av_frame_alloc)(const char *file, int line)
+#else
 AVFrame *av_frame_alloc(void)
+#endif
 {
+#ifdef DEBUGHEAP
+  AVFrame *frame = DEBUGHEAP_PREFIX(av_mallocz)(sizeof(*frame), file, line);
+#else
     AVFrame *frame = av_mallocz(sizeof(*frame));
+#endif
 
     if (!frame)
         return NULL;
@@ -538,9 +545,13 @@ fail:
     return ret;
 }
 
-AVFrame *av_frame_clone(const AVFrame *src)
+AVFrame *DEBUGHEAP_PREFIX(av_frame_clone)(const AVFrame *src DEBUGHEAP_ARG)
 {
+#ifdef DEBUGHEAP
+  AVFrame *ret = DEBUGHEAP_PREFIX(av_frame_alloc)(file,line);
+#else
     AVFrame *ret = av_frame_alloc();
+#endif
 
     if (!ret)
         return NULL;

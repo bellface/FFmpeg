@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "mem.h"
 #include "avutil.h"
 #include "buffer.h"
 #include "dict.h"
@@ -35,7 +36,6 @@
 #include "samplefmt.h"
 #include "pixfmt.h"
 #include "version.h"
-
 
 /**
  * @defgroup lavu_frame AVFrame
@@ -752,7 +752,12 @@ const char *av_get_colorspace_name(enum AVColorSpace val);
  * must be allocated through other means, e.g. with av_frame_get_buffer() or
  * manually.
  */
+#ifdef DEBUGHEAP
+AVFrame *DEBUGHEAP_PREFIX(av_frame_alloc)(const char *file, int line);
+#define av_frame_alloc() DEBUGHEAP_PREFIX(av_frame_alloc)(__FILE__,__LINE__)
+#else
 AVFrame *av_frame_alloc(void);
+#endif
 
 /**
  * Free the frame and any dynamically allocated objects in it,
@@ -787,8 +792,11 @@ int av_frame_ref(AVFrame *dst, const AVFrame *src);
  *
  * @return newly created AVFrame on success, NULL on error.
  */
-AVFrame *av_frame_clone(const AVFrame *src);
 
+AVFrame *DEBUGHEAP_PREFIX(av_frame_clone)(const AVFrame *src DEBUGHEAP_ARG);
+#ifdef DEBUGHEAP
+#define av_frame_clone(X) DEF_DEBUGFUNC(av_frame_clone,X)
+#endif
 /**
  * Unreference all the buffers referenced by frame and reset the frame fields.
  */

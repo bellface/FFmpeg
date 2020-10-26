@@ -56,6 +56,13 @@ const AVCodecHWConfigInternal *ff_qsv_hw_configs[] = {
     NULL
 };
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
+
 static int ff_qsv_get_continuous_buffer(AVCodecContext *avctx, AVFrame *frame, AVBufferPool *pool)
 {
     int ret = 0;
@@ -250,7 +257,11 @@ static int qsv_decode_init(AVCodecContext *avctx, QSVContext *q, mfxVideoParam *
 
     if (!avctx->hw_frames_ctx)
         q->pool = av_buffer_pool_init(av_image_get_buffer_size(avctx->pix_fmt,
+#ifdef DEBUGHEAP
+                    FFALIGN(avctx->width, 128), FFALIGN(avctx->height, 64), 1), local_av_buffer_allocz);
+#else
                     FFALIGN(avctx->width, 128), FFALIGN(avctx->height, 64), 1), av_buffer_allocz);
+#endif
     return 0;
 }
 

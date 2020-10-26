@@ -44,6 +44,12 @@ typedef struct VPxDecoderContext {
     int has_alpha_channel;
 } VPxContext;
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
 
 static int get_frame_buffer(void *priv, size_t min_size, vpx_codec_frame_buffer_t *fb)
 {
@@ -53,7 +59,11 @@ static int get_frame_buffer(void *priv, size_t min_size, vpx_codec_frame_buffer_
     if (min_size > ctx->pool_size) {
         av_buffer_pool_uninit(&ctx->pool);
         /* According to the libvpx docs the buffer must be zeroed out. */
+#ifdef DEBUGHEAP
+        ctx->pool = av_buffer_pool_init(min_size, local_av_buffer_allocz);
+#else
         ctx->pool = av_buffer_pool_init(min_size, av_buffer_allocz);
+#endif
         if (!ctx->pool) {
             ctx->pool_size = 0;
             return AVERROR(ENOMEM);

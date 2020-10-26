@@ -26,6 +26,13 @@
 #include "mem.h"
 #include "thread.h"
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_alloc(int size)
+{
+  return av_buffer_alloc(size);
+}
+#endif
+
 AVBufferRef *av_buffer_create(uint8_t *data, int size,
                               void (*free)(void *opaque, uint8_t *data),
                               void *opaque, int flags)
@@ -64,12 +71,15 @@ void av_buffer_default_free(void *opaque, uint8_t *data)
     av_free(data);
 }
 
-AVBufferRef *av_buffer_alloc(int size)
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_alloc)(int size DEBUGHEAP_ARG)
 {
     AVBufferRef *ret = NULL;
     uint8_t    *data = NULL;
-
+#ifdef DEBUGHEAP
+    data = DEBUGHEAP_PREFIX(av_malloc)(size, file, line);
+#else
     data = av_malloc(size);
+#endif
     if (!data)
         return NULL;
 
@@ -80,9 +90,13 @@ AVBufferRef *av_buffer_alloc(int size)
     return ret;
 }
 
-AVBufferRef *av_buffer_allocz(int size)
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_allocz)(int size DEBUGHEAP_ARG)
 {
+#ifdef DEBUGHEAP
+  AVBufferRef *ret = DEBUGHEAP_PREFIX(av_buffer_alloc)(size, file, line);
+#else
     AVBufferRef *ret = av_buffer_alloc(size);
+#endif
     if (!ret)
         return NULL;
 
@@ -228,7 +242,11 @@ AVBufferPool *av_buffer_pool_init2(int size, void *opaque,
     pool->size      = size;
     pool->opaque    = opaque;
     pool->alloc2    = alloc;
+#ifdef DEBUGHEAP
+    pool->alloc     = local_av_buffer_alloc; // fallback
+#else
     pool->alloc     = av_buffer_alloc; // fallback
+#endif
     pool->pool_free = pool_free;
 
     atomic_init(&pool->refcount, 1);
@@ -245,7 +263,11 @@ AVBufferPool *av_buffer_pool_init(int size, AVBufferRef* (*alloc)(int size))
     ff_mutex_init(&pool->mutex, NULL);
 
     pool->size     = size;
+#ifdef DEBUGHEAP
+    pool->alloc    = alloc ? alloc : local_av_buffer_alloc;
+#else
     pool->alloc    = alloc ? alloc : av_buffer_alloc;
+#endif
 
     atomic_init(&pool->refcount, 1);
 

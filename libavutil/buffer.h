@@ -25,6 +25,8 @@
 #ifndef AVUTIL_BUFFER_H
 #define AVUTIL_BUFFER_H
 
+#include "mem.h"
+
 #include <stdint.h>
 
 /**
@@ -98,13 +100,18 @@ typedef struct AVBufferRef {
  *
  * @return an AVBufferRef of given size or NULL when out of memory
  */
-AVBufferRef *av_buffer_alloc(int size);
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_alloc)(int size DEBUGHEAP_ARG);
 
 /**
  * Same as av_buffer_alloc(), except the returned buffer will be initialized
  * to zero.
  */
-AVBufferRef *av_buffer_allocz(int size);
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_allocz)(int size DEBUGHEAP_ARG);
+
+#ifdef DEBUGHEAP
+#define av_buffer_alloc(X) DEF_DEBUGFUNC(av_buffer_alloc,X)
+#define av_buffer_allocz(X) DEF_DEBUGFUNC(av_buffer_allocz,X)
+#endif
 
 /**
  * Always treat the buffer as read-only, even when it has only one

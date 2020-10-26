@@ -44,6 +44,13 @@
 #include "hwconfig.h"
 #include "profiles.h"
 
+#ifdef DEBUGHEAP
+static AVBufferRef *local_av_buffer_allocz(int size)
+{
+  return av_buffer_allocz(size);
+}
+#endif
+
 const uint8_t ff_hevc_pel_weight[65] = { [2] = 0, [4] = 1, [6] = 2, [8] = 3, [12] = 4, [16] = 5, [24] = 6, [32] = 7, [48] = 8, [64] = 9 };
 
 /**
@@ -127,9 +134,17 @@ static int pic_arrays_init(HEVCContext *s, const HEVCSPS *sps)
         goto fail;
 
     s->tab_mvf_pool = av_buffer_pool_init(min_pu_size * sizeof(MvField),
+#ifdef DEBUGHEAP
+                                          local_av_buffer_allocz);
+#else
                                           av_buffer_allocz);
+#endif
     s->rpl_tab_pool = av_buffer_pool_init(ctb_count * sizeof(RefPicListTab),
+#ifdef DEBUGHEAP
+                                          local_av_buffer_allocz);
+#else
                                           av_buffer_allocz);
+#endif
     if (!s->tab_mvf_pool || !s->rpl_tab_pool)
         goto fail;
 
