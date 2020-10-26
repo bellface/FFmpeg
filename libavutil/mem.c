@@ -86,10 +86,14 @@ inline void lock_list() {
 inline void unlock_list() {
   ff_mutex_unlock(&list_mutex);
 }
+
+#define HEADERSIZE (sizeof(memheadertype) + (32 - sizeof(memheadertype) % 32))
+
 static void *fillheader(void *ptr, size_t size, const char *file, int line) {
   if (ptr) {
     memheadertype *headptr = (memheadertype *)ptr;
-    ptr = (void *) ((char *) ptr + sizeof(memheadertype));
+  
+    ptr = (void *) ((char *) ptr + HEADERSIZE);
     headptr->file = file;
     headptr->line = (long) line;
     headptr->size = size;
@@ -111,7 +115,7 @@ static void *fillheader(void *ptr, size_t size, const char *file, int line) {
 
 static void *removefromlist(void *ptr) {
   if (ptr != NULL) {
-    memheadertype *header = (memheadertype *) ((char *) ptr - sizeof(memheadertype));
+    memheadertype *header = (memheadertype *) ((char *) ptr - HEADERSIZE);
     lock_list();
     memheadertype *prev = header->prev;
     memheadertype *next = header->next;
@@ -150,7 +154,7 @@ void *DEBUGHEAP_PREFIX(av_malloc)(size_t arg_size DEBUGHEAP_ARG)
 
     size_t size = arg_size;
 #ifdef DEBUGHEAP
-      size += sizeof(memheadertype);
+    size += HEADERSIZE;
 #endif
 
 #if HAVE_POSIX_MEMALIGN
@@ -217,7 +221,7 @@ void *DEBUGHEAP_PREFIX(av_realloc)(void *ptr, size_t arg_size DEBUGHEAP_ARG)
 
     size_t size = arg_size;
 #ifdef DEBUGHEAP
-    size += sizeof(memheadertype);
+    size += HEADERSIZE;
     ptr = removefromlist(ptr);
 #endif
     
@@ -347,9 +351,7 @@ void av_freep(void *arg)
 
     memcpy(&val, arg, sizeof(val));
     memcpy(arg, &(void *){ NULL }, sizeof(val));
-#ifdef DEBUGHEAP
-    val = removefromlist(val);
-#endif
+
     av_free(val);
 }
 
