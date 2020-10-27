@@ -24,7 +24,7 @@
 
 #include "buffer.h"
 #include "thread.h"
-
+#include "mem.h"
 /**
  * The buffer was av_realloc()ed, so it is reallocatable.
  */
@@ -91,7 +91,11 @@ struct AVBufferPool {
 
     int size;
     void *opaque;
+#ifdef DEBUGHEAP
+    AVBufferRef* (*alloc)(int size, const char *file, int line);
+#else
     AVBufferRef* (*alloc)(int size);
+#endif
     AVBufferRef* (*alloc2)(void *opaque, int size);
     void         (*pool_free)(void *opaque);
 };

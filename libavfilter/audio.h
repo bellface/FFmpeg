@@ -24,6 +24,7 @@
 
 #include "avfilter.h"
 #include "internal.h"
+#include "mem.h"
 
 static const enum AVSampleFormat ff_packed_sample_fmts_array[] = {
     AV_SAMPLE_FMT_U8,
@@ -44,7 +45,7 @@ static const enum AVSampleFormat ff_planar_sample_fmts_array[] = {
 };
 
 /** default handler for get_audio_buffer() for audio inputs */
-AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples);
+AVFrame *DEBUGHEAP_PREFIX(ff_default_get_audio_buffer)(AVFilterLink *link, int nb_samples DEBUGHEAP_ARG);
 
 /** get_audio_buffer() handler for filters which simply pass audio along */
 AVFrame *ff_null_get_audio_buffer(AVFilterLink *link, int nb_samples);
@@ -58,6 +59,11 @@ AVFrame *ff_null_get_audio_buffer(AVFilterLink *link, int nb_samples);
  * @return               A reference to the samples. This must be unreferenced with
  *                       avfilter_unref_buffer when you are finished with it.
  */
-AVFrame *ff_get_audio_buffer(AVFilterLink *link, int nb_samples);
+AVFrame *DEBUGHEAP_PREFIX(ff_get_audio_buffer)(AVFilterLink *link, int nb_samples DEBUGHEAP_ARG);
+
+#ifdef DEBUGHEAP
+#define ff_default_get_audio_buffer(X,Y) DEF_DEBUGFUNC(ff_default_get_audio_buffer,X,Y)
+#define ff_get_audio_buffer(X,Y) DEF_DEBUGFUNC(ff_get_audio_buffer,X,Y)
+#endif
 
 #endif /* AVFILTER_AUDIO_H */

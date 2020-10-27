@@ -217,6 +217,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamplesref)
     n_out = swr_convert(aresample->swr, outsamplesref->extended_data, n_out,
                                  (void *)insamplesref->extended_data, n_in);
     if (n_out <= 0) {
+      av_log(NULL, AV_LOG_INFO, "swr_convert failed\n");
         av_frame_free(&outsamplesref);
         av_frame_free(&insamplesref);
         return 0;
@@ -227,6 +228,11 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamplesref)
     outsamplesref->nb_samples  = n_out;
 
     ret = ff_filter_frame(outlink, outsamplesref);
+#ifdef DEBUGHEAP
+    //    if (outlink->dst->fifo.queued > 100) {
+    //      av_log(NULL, AV_LOG_INFO, "outlink->dst->fifo.queued = %d\n", outlink->dst->fifo.queued);
+    //}
+#endif
     av_frame_free(&insamplesref);
     return ret;
 }

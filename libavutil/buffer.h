@@ -134,9 +134,16 @@ AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_allocz)(int size DEBUGHEAP_ARG);
  *
  * @return an AVBufferRef referring to data on success, NULL on failure.
  */
+#ifdef DEBUGHEAP
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_create)(uint8_t *data, int size,
+                              void (*free)(void *opaque, uint8_t *data),
+                              void *opaque, int flags DEBUGHEAP_ARG);
+#define av_buffer_create(V,W,X,Y,Z) DEF_DEBUGFUNC(av_buffer_create,V,W,X,Y,Z)
+#else
 AVBufferRef *av_buffer_create(uint8_t *data, int size,
                               void (*free)(void *opaque, uint8_t *data),
                               void *opaque, int flags);
+#endif
 
 /**
  * Default free callback, which calls av_free() on the buffer data.
@@ -290,8 +297,12 @@ void av_buffer_pool_uninit(AVBufferPool **pool);
  *
  * @return a reference to the new buffer on success, NULL on error.
  */
+#ifdef DEBUGHEAP
+AVBufferRef *DEBUGHEAP_PREFIX(av_buffer_pool_get)(AVBufferPool *pool DEBUGHEAP_ARG);
+#define av_buffer_pool_get(X) DEF_DEBUGFUNC(av_buffer_pool_get,X)
+#else
 AVBufferRef *av_buffer_pool_get(AVBufferPool *pool);
-
+#endif
 /**
  * Query the original opaque parameter of an allocated buffer in the pool.
  *

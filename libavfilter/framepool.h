@@ -112,7 +112,9 @@ int ff_frame_pool_get_audio_config(FFFramePool *pool,
  *
  * @return a new AVFrame on success, NULL on error.
  */
-AVFrame *ff_frame_pool_get(FFFramePool *pool);
-
+AVFrame *DEBUGHEAP_PREFIX(ff_frame_pool_get)(FFFramePool *pool DEBUGHEAP_ARG);
+#ifdef DEBUGHEAP
+#define ff_frame_pool_get(X) DEF_DEBUGFUNC(ff_frame_pool_get,X)
+#endif
 
 #endif /* AVFILTER_FRAMEPOOL_H */

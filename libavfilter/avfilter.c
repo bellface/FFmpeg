@@ -1115,6 +1115,13 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
         av_frame_free(&frame);
         return ret;
     }
+#ifdef DEBUGHEAP
+    if (link->fifo.queued > 100) {
+      if (link->fifo.queued % 100 == 0) {
+	av_log(NULL, AV_LOG_INFO, "link->fifo.queued = %d\n", link->fifo.queued);
+      }
+    }
+#endif
     ff_filter_set_ready(link->dst, 300);
     return 0;
 

@@ -192,13 +192,16 @@ int ff_frame_pool_get_audio_config(FFFramePool *pool,
     return 0;
 }
 
-AVFrame *ff_frame_pool_get(FFFramePool *pool)
+AVFrame *DEBUGHEAP_PREFIX(ff_frame_pool_get)(FFFramePool *pool DEBUGHEAP_ARG)
 {
     int i;
     AVFrame *frame;
     const AVPixFmtDescriptor *desc;
-
+#ifdef DEBUGHEAP
+    frame = DEBUGHEAP_PREFIX(av_frame_alloc)(file, line);
+#else
     frame = av_frame_alloc();
+#endif
     if (!frame) {
         return NULL;
     }
@@ -258,13 +261,21 @@ AVFrame *ff_frame_pool_get(FFFramePool *pool)
         }
 
         for (i = 0; i < FFMIN(pool->planes, AV_NUM_DATA_POINTERS); i++) {
+#ifdef DEBUGHEAP
+	  frame->buf[i] = DEBUGHEAP_PREFIX(av_buffer_pool_get)(pool->pools[0], file, line);
+#else
             frame->buf[i] = av_buffer_pool_get(pool->pools[0]);
+#endif
             if (!frame->buf[i])
                 goto fail;
             frame->extended_data[i] = frame->data[i] = frame->buf[i]->data;
         }
         for (i = 0; i < frame->nb_extended_buf; i++) {
+#ifdef DEBUGHEAP
+	  frame->extended_buf[i] = DEBUGHEAP_PREFIX(av_buffer_pool_get)(pool->pools[0], file, line);
+#else
             frame->extended_buf[i] = av_buffer_pool_get(pool->pools[0]);
+#endif
             if (!frame->extended_buf[i])
                 goto fail;
             frame->extended_data[i + AV_NUM_DATA_POINTERS] = frame->extended_buf[i]->data;

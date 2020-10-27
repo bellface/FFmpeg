@@ -41,7 +41,7 @@ AVFrame *ff_null_get_audio_buffer(AVFilterLink *link, int nb_samples)
     return ff_get_audio_buffer(link->dst->outputs[0], nb_samples);
 }
 
-AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples)
+AVFrame *DEBUGHEAP_PREFIX(ff_default_get_audio_buffer)(AVFilterLink *link, int nb_samples DEBUGHEAP_ARG)
 {
     AVFrame *frame = NULL;
     int channels = link->channels;
@@ -50,6 +50,7 @@ AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples)
 
     if (!link->frame_pool) {
 #ifdef DEBUGHEAP
+      av_log(NULL, AV_LOG_INFO, "%s:%d -- %s: recreating frame_pool\n", __FILE__, __LINE__, file);
         link->frame_pool = ff_frame_pool_audio_init(local_av_buffer_allocz, channels,
 #else
         link->frame_pool = ff_frame_pool_audio_init(av_buffer_allocz, channels,
@@ -74,6 +75,7 @@ AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples)
 
             ff_frame_pool_uninit((FFFramePool **)&link->frame_pool);
 #ifdef DEBUGHEAP
+      av_log(NULL, AV_LOG_INFO, "%s:%d -- %s: recreating frame_pool\n", __FILE__, __LINE__, file);
             link->frame_pool = ff_frame_pool_audio_init(local_av_buffer_allocz, channels,
 #else
             link->frame_pool = ff_frame_pool_audio_init(av_buffer_allocz, channels,
@@ -83,8 +85,11 @@ AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples)
                 return NULL;
         }
     }
-
+#ifdef DEBUGHEAP
+	frame = DEBUGHEAP_PREFIX(ff_frame_pool_get)(link->frame_pool, file, line);
+#else
     frame = ff_frame_pool_get(link->frame_pool);
+#endif
     if (!frame)
         return NULL;
 
@@ -97,7 +102,7 @@ AVFrame *ff_default_get_audio_buffer(AVFilterLink *link, int nb_samples)
     return frame;
 }
 
-AVFrame *ff_get_audio_buffer(AVFilterLink *link, int nb_samples)
+AVFrame *DEBUGHEAP_PREFIX(ff_get_audio_buffer)(AVFilterLink *link, int nb_samples DEBUGHEAP_ARG)
 {
     AVFrame *ret = NULL;
 
@@ -105,7 +110,11 @@ AVFrame *ff_get_audio_buffer(AVFilterLink *link, int nb_samples)
         ret = link->dstpad->get_audio_buffer(link, nb_samples);
 
     if (!ret)
+#ifdef DEBUGHEAP
+      ret = DEBUGHEAP_PREFIX(ff_default_get_audio_buffer)(link, nb_samples, file, line);
+#else
         ret = ff_default_get_audio_buffer(link, nb_samples);
+#endif
 
     return ret;
 }

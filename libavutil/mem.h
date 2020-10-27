@@ -190,7 +190,7 @@ typedef struct memheader {
 #define DEBUGHEAP_PREFIX_SYM av_DH_
 #define DEBUGHEAP_PREFIX(X) av_DH_##X
 #define DEBUGHEAP_ARG ,const char* file, int line
-#define DEF_DEBUGFUNC(X,...) av_DH_##X(__VA_ARGS__, __FILE__, __LINE__)
+#define DEF_DEBUGFUNC(NM,...) av_DH_##NM(__VA_ARGS__, __FILE__, __LINE__)
 #else
 #define DEBUGHEAP_PREFIX(X) X
 #define DEBUGHEAP_ARG
