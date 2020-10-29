@@ -436,7 +436,7 @@ AVPacket *av_packet_alloc(void);
  * @see av_packet_alloc
  * @see av_packet_ref
  */
-AVPacket *av_packet_clone(const AVPacket *src);
+AVPacket *DEBUGHEAP_PREFIX(av_packet_clone)(const AVPacket *src DEBUGHEAP_ARG);
 
 /**
  * Free the packet, if the packet is reference counted, it will be
@@ -465,7 +465,7 @@ void av_init_packet(AVPacket *pkt);
  * @param size wanted payload size
  * @return 0 if OK, AVERROR_xxx otherwise
  */
-int av_new_packet(AVPacket *pkt, int size);
+int DEBUGHEAP_PREFIX(av_new_packet)(AVPacket *pkt, int size DEBUGHEAP_ARG);
 
 /**
  * Reduce packet size, correctly zeroing padding
@@ -640,7 +640,7 @@ void av_packet_free_side_data(AVPacket *pkt);
  * @return 0 on success, a negative AVERROR on error. On error, dst
  *         will be blank (as if returned by av_packet_alloc()).
  */
-int av_packet_ref(AVPacket *dst, const AVPacket *src);
+int DEBUGHEAP_PREFIX(av_packet_ref)(AVPacket *dst, const AVPacket *src DEBUGHEAP_ARG);
 
 /**
  * Wipe the packet.
@@ -689,7 +689,7 @@ int av_packet_copy_props(AVPacket *dst, const AVPacket *src);
  * @return 0 on success, a negative AVERROR on error. On failure, the
  *         packet is unchanged.
  */
-int av_packet_make_refcounted(AVPacket *pkt);
+int DEBUGHEAP_PREFIX(av_packet_make_refcounted)(AVPacket *pkt DEBUGHEAP_ARG);
 
 /**
  * Create a writable reference for the data described by a given packet,
@@ -700,7 +700,7 @@ int av_packet_make_refcounted(AVPacket *pkt);
  * @return 0 on success, a negative AVERROR on failure. On failure, the
  *         packet is unchanged.
  */
-int av_packet_make_writable(AVPacket *pkt);
+int DEBUGHEAP_PREFIX(av_packet_make_writable)(AVPacket *pkt DEBUGHEAP_ARG);
 
 /**
  * Convert valid timing fields (timestamps / durations) in a packet from one
@@ -714,6 +714,14 @@ int av_packet_make_writable(AVPacket *pkt);
  *               converted
  */
 void av_packet_rescale_ts(AVPacket *pkt, AVRational tb_src, AVRational tb_dst);
+
+#ifdef DEBUGHEAP
+#define av_new_packet(X,Y) DEF_DEBUGFUNC(av_new_packet,X,Y)
+#define av_packet_ref(X,Y) DEF_DEBUGFUNC(av_packet_ref,X,Y)
+#define av_packet_clone(X) DEF_DEBUGFUNC(av_packet_clone,X)
+#define av_packet_make_refcounted(X) DEF_DEBUGFUNC(av_packet_make_refcounted,X)
+#define av_packet_make_writable(X) DEF_DEBUGFUNC(av_packet_make_writable,X)
+#endif
 
 /**
  * @}

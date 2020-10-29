@@ -209,8 +209,10 @@ int av_buffer_make_writable(AVBufferRef **buf);
  * reference to it (i.e. the one passed to this function). In all other cases
  * a new buffer is allocated and the data is copied.
  */
-int av_buffer_realloc(AVBufferRef **buf, int size);
-
+int DEBUGHEAP_PREFIX(av_buffer_realloc)(AVBufferRef **buf, int size DEBUGHEAP_ARG);
+#ifdef DEBUGHEAP
+#define av_buffer_realloc(X,Y) DEF_DEBUGFUNC(av_buffer_realloc,X,Y)
+#endif
 /**
  * @}
  */

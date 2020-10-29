@@ -70,13 +70,20 @@ void av_packet_free(AVPacket **pkt)
     av_freep(pkt);
 }
 
+#ifdef DEBUGHEAP
+static int packet_alloc(AVBufferRef **buf, int size DEBUGHEAP_ARG)
+#else
 static int packet_alloc(AVBufferRef **buf, int size)
+#endif
 {
     int ret;
     if (size < 0 || size >= INT_MAX - AV_INPUT_BUFFER_PADDING_SIZE)
         return AVERROR(EINVAL);
-
+#ifdef DEBUGHEAP
+    ret = DEBUGHEAP_PREFIX(av_buffer_realloc)(buf, size + AV_INPUT_BUFFER_PADDING_SIZE, file, line);
+#else
     ret = av_buffer_realloc(buf, size + AV_INPUT_BUFFER_PADDING_SIZE);
+#endif
     if (ret < 0)
         return ret;
 
@@ -85,10 +92,14 @@ static int packet_alloc(AVBufferRef **buf, int size)
     return 0;
 }
 
-int av_new_packet(AVPacket *pkt, int size)
+int DEBUGHEAP_PREFIX(av_new_packet)(AVPacket *pkt, int size DEBUGHEAP_ARG)
 {
     AVBufferRef *buf = NULL;
+#ifdef DEBUGHEAP
+    int ret = packet_alloc(&buf, size, file, line);
+#else
     int ret = packet_alloc(&buf, size);
+#endif
     if (ret < 0)
         return ret;
 
@@ -611,7 +622,7 @@ void av_packet_unref(AVPacket *pkt)
     pkt->size = 0;
 }
 
-int av_packet_ref(AVPacket *dst, const AVPacket *src)
+int DEBUGHEAP_PREFIX(av_packet_ref)(AVPacket *dst, const AVPacket *src DEBUGHEAP_ARG)
 {
     int ret;
 
@@ -622,7 +633,11 @@ int av_packet_ref(AVPacket *dst, const AVPacket *src)
         goto fail;
 
     if (!src->buf) {
+#ifdef DEBUGHEAP
+      ret = packet_alloc(&dst->buf, src->size, file, line);
+#else
         ret = packet_alloc(&dst->buf, src->size);
+#endif
         if (ret < 0)
             goto fail;
         av_assert1(!src->size || src->data);
@@ -647,14 +662,17 @@ fail:
     return ret;
 }
 
-AVPacket *av_packet_clone(const AVPacket *src)
+AVPacket *DEBUGHEAP_PREFIX(av_packet_clone)(const AVPacket *src DEBUGHEAP_ARG)
 {
     AVPacket *ret = av_packet_alloc();
 
     if (!ret)
         return ret;
-
+#ifdef DEBUGHEAP
+    if (DEBUGHEAP_PREFIX(av_packet_ref)(ret, src, file, line))
+#else
     if (av_packet_ref(ret, src))
+#endif
         av_packet_free(&ret);
 
     return ret;
@@ -668,14 +686,17 @@ void av_packet_move_ref(AVPacket *dst, AVPacket *src)
     src->size = 0;
 }
 
-int av_packet_make_refcounted(AVPacket *pkt)
+int DEBUGHEAP_PREFIX(av_packet_make_refcounted)(AVPacket *pkt DEBUGHEAP_ARG)
 {
     int ret;
 
     if (pkt->buf)
         return 0;
-
+#ifdef DEBUGHEAP
+    ret = packet_alloc(&pkt->buf, pkt->size, file, line);
+#else
     ret = packet_alloc(&pkt->buf, pkt->size);
+#endif
     if (ret < 0)
         return ret;
     av_assert1(!pkt->size || pkt->data);
@@ -687,15 +708,18 @@ int av_packet_make_refcounted(AVPacket *pkt)
     return 0;
 }
 
-int av_packet_make_writable(AVPacket *pkt)
+int DEBUGHEAP_PREFIX(av_packet_make_writable)(AVPacket *pkt DEBUGHEAP_ARG)
 {
     AVBufferRef *buf = NULL;
     int ret;
 
     if (pkt->buf && av_buffer_is_writable(pkt->buf))
         return 0;
-
+#ifdef DEBUGHEAP
+    ret = packet_alloc(&buf, pkt->size, file, line);
+#else
     ret = packet_alloc(&buf, pkt->size);
+#endif
     if (ret < 0)
         return ret;
     av_assert1(!pkt->size || pkt->data);

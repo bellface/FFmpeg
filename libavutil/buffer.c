@@ -190,7 +190,7 @@ int av_buffer_make_writable(AVBufferRef **pbuf)
     return 0;
 }
 
-int av_buffer_realloc(AVBufferRef **pbuf, int size)
+int DEBUGHEAP_PREFIX(av_buffer_realloc)(AVBufferRef **pbuf, int size DEBUGHEAP_ARG)
 {
     AVBufferRef *buf = *pbuf;
     uint8_t *tmp;
@@ -198,11 +198,18 @@ int av_buffer_realloc(AVBufferRef **pbuf, int size)
     if (!buf) {
         /* allocate a new buffer with av_realloc(), so it will be reallocatable
          * later */
+#ifdef DEBUGHEAP
+      uint8_t *data = DEBUGHEAP_PREFIX(av_realloc)(NULL, size, file, line);
+#else
         uint8_t *data = av_realloc(NULL, size);
+#endif
         if (!data)
             return AVERROR(ENOMEM);
-
+#ifdef DEBUGHEAP
+        buf = DEBUGHEAP_PREFIX(av_buffer_create)(data, size, av_buffer_default_free, NULL, 0, file, line);
+#else
         buf = av_buffer_create(data, size, av_buffer_default_free, NULL, 0);
+#endif
         if (!buf) {
             av_freep(&data);
             return AVERROR(ENOMEM);
@@ -219,8 +226,11 @@ int av_buffer_realloc(AVBufferRef **pbuf, int size)
         !av_buffer_is_writable(buf) || buf->data != buf->buffer->data) {
         /* cannot realloc, allocate a new reallocable buffer and copy data */
         AVBufferRef *new = NULL;
-
+#ifdef DEBUGHEAP
+        DEBUGHEAP_PREFIX(av_buffer_realloc)(&new, size, file, line);
+#else
         av_buffer_realloc(&new, size);
+#endif
         if (!new)
             return AVERROR(ENOMEM);
 
@@ -229,8 +239,11 @@ int av_buffer_realloc(AVBufferRef **pbuf, int size)
         buffer_replace(pbuf, &new);
         return 0;
     }
-
+#ifdef DEBUGHEAP
+    tmp = DEBUGHEAP_PREFIX(av_realloc)(buf->buffer->data, size, file, line);
+#else
     tmp = av_realloc(buf->buffer->data, size);
+#endif
     if (!tmp)
         return AVERROR(ENOMEM);
 

@@ -217,7 +217,6 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *insamplesref)
     n_out = swr_convert(aresample->swr, outsamplesref->extended_data, n_out,
                                  (void *)insamplesref->extended_data, n_in);
     if (n_out <= 0) {
-      av_log(NULL, AV_LOG_INFO, "swr_convert failed\n");
         av_frame_free(&outsamplesref);
         av_frame_free(&insamplesref);
         return 0;

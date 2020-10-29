@@ -1072,6 +1072,28 @@ fail:
     return ret;
 }
 
+int avfilter_outq_length(AVFilterContext *filter)
+{
+  int length = 0;
+  AVFilterLink *inlink = NULL;
+  AVFilterLink *link = NULL;
+#if 0
+  for (int i = 0;i < filter->nb_inputs;++i) {
+    inlink = filter->inputs[i];
+    link = inlink->dst->outputs[0];
+    length = link->fifo.queued;
+    if (length > 100) {
+      fprintf(stderr, "%d: fifo.queued: %d\n", i, length);
+    }
+  }
+#endif
+  link = filter->outputs[0];
+
+  length = link->fifo.queued;
+
+  return length;
+}
+
 int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
 {
     int ret;
@@ -1117,9 +1139,9 @@ int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
     }
 #ifdef DEBUGHEAP
     if (link->fifo.queued > 100) {
-      if (link->fifo.queued % 100 == 0) {
-	av_log(NULL, AV_LOG_INFO, "link->fifo.queued = %d\n", link->fifo.queued);
-      }
+      // if (link->fifo.queued % 100 == 0) {
+	fprintf(stderr, "link->fifo.queued = %d\n", link->fifo.queued);
+     // }
     }
 #endif
     ff_filter_set_ready(link->dst, 300);
