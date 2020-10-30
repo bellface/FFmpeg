@@ -1162,6 +1162,7 @@ char *avfilter_graph_dump(AVFilterGraph *graph, const char *options);
 int avfilter_graph_request_oldest(AVFilterGraph *graph);
 
 int avfilter_outq_length(AVFilterContext *filter);
+#define AVFILTER_HAS_QLENFUNC
 
 /**
  * @}

@@ -1072,6 +1072,7 @@ fail:
     return ret;
 }
 
+#ifdef AVFILTER_HAS_QLENFUNC
 int avfilter_outq_length(AVFilterContext *filter)
 {
   int length = 0;
@@ -1093,6 +1094,7 @@ int avfilter_outq_length(AVFilterContext *filter)
 
   return length;
 }
+#endif
 
 int ff_filter_frame(AVFilterLink *link, AVFrame *frame)
 {
