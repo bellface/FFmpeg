@@ -34,7 +34,7 @@
 #include "error.h"
 #include "avutil.h"
 
-// #define DEBUGHEAP
+#define DEBUGHEAP
 
 #ifdef DEBUGHEAP
 typedef struct memheader {

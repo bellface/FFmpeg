@@ -24,7 +24,7 @@
 
 #include "avfilter.h"
 #include "internal.h"
-#include "mem.h"
+#include "libavutil/mem.h"
 
 static const enum AVSampleFormat ff_packed_sample_fmts_array[] = {
     AV_SAMPLE_FMT_U8,
