@@ -94,6 +94,27 @@ inline void unlock_list() {
 //
 #define HEADERSIZE (sizeof(memheadertype) + (ALIGN - sizeof(memheadertype) % ALIGN))
 
+static int checkblock(void *pblk)
+{
+  if (pblk == NULL) {
+    return 0;
+  }
+  int clean = 0;
+  memheadertype *pcur = (memheadertype *)pblk;
+  char *ptail = (char *)pcur + HEADERSIZE + pcur->size + (ALIGN - pcur->size % ALIGN);
+  for (int i = 0;i < ALIGN;++i) {
+    if (ptail[i] != 'X') {
+      clean = 1;
+      break;
+    }
+  }
+  if (clean != 0) {
+    fprintf(stderr, "!!found contamination!! allocated: %s:%d -- %d\n", pcur->file, pcur->line, pcur->size);
+    fflush(stderr);
+  }
+  return clean;
+}
+
 static void *fillheader(void *ptr, size_t size, const char *file, int line) {
   if (ptr) {
     memheadertype *headptr = (memheadertype *)ptr;
@@ -113,6 +134,9 @@ static void *fillheader(void *ptr, size_t size, const char *file, int line) {
       tail->next = headptr;
     }
     tail = headptr;
+    // write clean mark at tail.
+    char *ptail = (char *) headptr + (HEADERSIZE + size + (ALIGN - size % ALIGN));
+    memset(ptail, (int) 'X', ALIGN);
     unlock_list();
   }
   return ptr;
@@ -124,7 +148,11 @@ static void *removefromlist(void *ptr) {
     lock_list();
     memheadertype *prev = header->prev;
     memheadertype *next = header->next;
-    
+
+    checkblock(header);
+    checkblock(prev);
+    checkblock(next);
+
     if (prev != NULL) {
       prev->next = next;
     }
@@ -159,7 +187,8 @@ void *DEBUGHEAP_PREFIX(av_malloc)(size_t arg_size DEBUGHEAP_ARG)
 
     size_t size = arg_size;
 #ifdef DEBUGHEAP
-    size += HEADERSIZE;
+    // add header and mark area
+    size += (HEADERSIZE + ALIGN + (ALIGN - size % ALIGN));
 #endif
 
 #if HAVE_POSIX_MEMALIGN
@@ -226,7 +255,7 @@ void *DEBUGHEAP_PREFIX(av_realloc)(void *ptr, size_t arg_size DEBUGHEAP_ARG)
 
     size_t size = arg_size;
 #ifdef DEBUGHEAP
-    size += HEADERSIZE;
+    size += (HEADERSIZE + ALIGN + (ALIGN - size % ALIGN));
     ptr = removefromlist(ptr);
 #endif
     
@@ -705,6 +734,20 @@ void av_mem_traverse(void (*callback)(const char *file, int line, size_t size))
   lock_list();
   memheadertype *pcur = top;
   while (pcur != NULL) {
+    // check tail mark
+    int clean = 0;
+    char *ptail = (char *)pcur + HEADERSIZE + pcur->size + (ALIGN - pcur->size % ALIGN);
+    for (int i = 0;i < ALIGN;++i) {
+      if (ptail[i] != 'X') {
+	clean = 1;
+	break;
+      }
+    }
+    if (clean != 0) {
+      fprintf(stderr, "!!found dirty block!!\n");
+      fflush(stderr);
+    }
+    //
     callback(pcur->file, (int) pcur->line, pcur->size);
     pcur = pcur->next;
   }
