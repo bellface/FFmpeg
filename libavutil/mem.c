@@ -92,8 +92,7 @@ inline void unlock_list() {
 // #define HEADERSIZE (sizeof(memheadertype) + (32 - sizeof(memheadertype) % 32))
 
 //
-// depend on the individual size of each elements(every size of elements are 32bits aligned).
-#define HEADERSIZE (sizeof(memheadertype))
+#define HEADERSIZE (sizeof(memheadertype) + (ALIGN - sizeof(memheadertype) % ALIGN))
 
 static void *fillheader(void *ptr, size_t size, const char *file, int line) {
   if (ptr) {
