@@ -75,7 +75,11 @@ void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size)
         *size = 0;
         return;
     }
+#ifdef DEBUGHEAP
+    if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1, __FILE__, __LINE__))
+#else
     if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1))
+#endif
         memset(*p + min_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 }
 
@@ -87,7 +91,11 @@ void av_fast_padded_mallocz(void *ptr, unsigned int *size, size_t min_size)
         *size = 0;
         return;
     }
+#ifdef DEBUGHEAP
+    if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1, __FILE__, __LINE__))
+#else
     if (!ff_fast_malloc(p, size, min_size + AV_INPUT_BUFFER_PADDING_SIZE, 1))
+#endif
         memset(*p, 0, min_size + AV_INPUT_BUFFER_PADDING_SIZE);
 }
 

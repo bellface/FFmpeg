@@ -70,17 +70,98 @@ void  free(void *ptr);
 
 static size_t max_alloc_size= INT_MAX;
 
-void av_max_alloc(size_t max){
+#ifdef DEBUGHEAP
+#include "thread.h"
+static AVMutex list_mutex;
+static int ismutexinitialized = 0;
+static memheadertype *top = NULL;
+static memheadertype *tail = NULL;
+inline void lock_list() {
+  if (ismutexinitialized == 0) {
+    ff_mutex_init(&list_mutex, NULL);
+    ismutexinitialized = 1;
+  }
+  ff_mutex_lock(&list_mutex);
+}
+inline void unlock_list() {
+  ff_mutex_unlock(&list_mutex);
+}
+
+
+// align to 32bytes size.
+// #define HEADERSIZE (sizeof(memheadertype) + (32 - sizeof(memheadertype) % 32))
+
+//
+// depend on the individual size of each elements(every size of elements are 32bits aligned).
+#define HEADERSIZE (sizeof(memheadertype))
+
+static void *fillheader(void *ptr, size_t size, const char *file, int line) {
+  if (ptr) {
+    memheadertype *headptr = (memheadertype *)ptr;
+  
+    ptr = (void *) ((char *) ptr + HEADERSIZE);
+    headptr->file = file;
+    headptr->line = (long) line;
+    headptr->size = size;
+    headptr->next = NULL;
+    headptr->prev = NULL;
+    lock_list();
+    if (top == NULL) {
+      top = headptr;
+    }
+    headptr->prev = tail;
+    if (tail != NULL) {
+      tail->next = headptr;
+    }
+    tail = headptr;
+    unlock_list();
+  }
+  return ptr;
+}
+
+static void *removefromlist(void *ptr) {
+  if (ptr != NULL) {
+    memheadertype *header = (memheadertype *) ((char *) ptr - HEADERSIZE);
+    lock_list();
+    memheadertype *prev = header->prev;
+    memheadertype *next = header->next;
+    
+    if (prev != NULL) {
+      prev->next = next;
+    }
+    if (next != NULL) {
+      next->prev = prev;
+    }
+    if (header == top) {
+      top = next;
+    }
+    if (header == tail) {
+      tail = prev;
+    }
+    unlock_list();
+    return (void *) header;
+  } else {
+    return ptr;
+  }
+}
+
+#endif
+
+void DEBUGHEAP_PREFIX(av_max_alloc)(size_t max DEBUGHEAP_ARG){
     max_alloc_size = max;
 }
 
-void *av_malloc(size_t size)
+void *DEBUGHEAP_PREFIX(av_malloc)(size_t arg_size DEBUGHEAP_ARG)
 {
     void *ptr = NULL;
 
-    /* let's disallow possibly ambiguous cases */
-    if (size > (max_alloc_size - 32))
+    if (arg_size > max_alloc_size)
         return NULL;
+
+    size_t size = arg_size;
+#ifdef DEBUGHEAP
+    size += HEADERSIZE;
+#endif
 
 #if HAVE_POSIX_MEMALIGN
     if (size) //OS X on SDK 10.6 has a broken posix_memalign implementation
@@ -123,8 +204,15 @@ void *av_malloc(size_t size)
 #endif
     if(!ptr && !size) {
         size = 1;
+#ifdef DEBUGHEAP
+        ptr= DEBUGHEAP_PREFIX(av_malloc)(1, file, line);
+#else
         ptr= av_malloc(1);
+#endif
     }
+#ifdef DEBUGHEAP
+    ptr = fillheader(ptr, arg_size, file, line);
+#endif
 #if CONFIG_MEMORY_POISONING
     if (ptr)
         memset(ptr, FF_MEMORY_POISON, size);
@@ -132,20 +220,29 @@ void *av_malloc(size_t size)
     return ptr;
 }
 
-void *av_realloc(void *ptr, size_t size)
+void *DEBUGHEAP_PREFIX(av_realloc)(void *ptr, size_t arg_size DEBUGHEAP_ARG)
 {
-    /* let's disallow possibly ambiguous cases */
-    if (size > (max_alloc_size - 32))
+    if (arg_size > max_alloc_size)
         return NULL;
 
-#if HAVE_ALIGNED_MALLOC
-    return _aligned_realloc(ptr, size + !size, ALIGN);
-#else
-    return realloc(ptr, size + !size);
+    size_t size = arg_size;
+#ifdef DEBUGHEAP
+    size += HEADERSIZE;
+    ptr = removefromlist(ptr);
 #endif
+    
+#if HAVE_ALIGNED_MALLOC
+    void *newptr = _aligned_realloc(ptr, size + !size, ALIGN);
+#else
+    void *newptr = realloc(ptr, size + !size);
+#endif
+#ifdef DEBUGHEAP
+    newptr = fillheader(newptr, arg_size, file, line);
+#endif
+    return newptr;
 }
 
-void *av_realloc_f(void *ptr, size_t nelem, size_t elsize)
+void *DEBUGHEAP_PREFIX(av_realloc_f)(void *ptr, size_t nelem, size_t elsize DEBUGHEAP_ARG)
 {
     size_t size;
     void *r;
@@ -154,13 +251,17 @@ void *av_realloc_f(void *ptr, size_t nelem, size_t elsize)
         av_free(ptr);
         return NULL;
     }
+#ifdef DEBUGHEAP
+    r = DEBUGHEAP_PREFIX(av_realloc)(ptr, size, file, line);
+#else
     r = av_realloc(ptr, size);
+#endif
     if (!r)
         av_free(ptr);
     return r;
 }
 
-int av_reallocp(void *ptr, size_t size)
+int DEBUGHEAP_PREFIX(av_reallocp)(void *ptr, size_t size DEBUGHEAP_ARG)
 {
     void *val;
 
@@ -170,8 +271,11 @@ int av_reallocp(void *ptr, size_t size)
     }
 
     memcpy(&val, ptr, sizeof(val));
+#ifdef DEBUGHEAP
+    val = DEBUGHEAP_PREFIX(av_realloc)(val, size, file, line);
+#else
     val = av_realloc(val, size);
-
+#endif
     if (!val) {
         av_freep(ptr);
         return AVERROR(ENOMEM);
@@ -181,33 +285,52 @@ int av_reallocp(void *ptr, size_t size)
     return 0;
 }
 
-void *av_malloc_array(size_t nmemb, size_t size)
+void *DEBUGHEAP_PREFIX(av_malloc_array)(size_t nmemb, size_t size DEBUGHEAP_ARG)
 {
-    if (!size || nmemb >= INT_MAX / size)
+    size_t result;
+    if (av_size_mult(nmemb, size, &result) < 0)
         return NULL;
-    return av_malloc(nmemb * size);
+#ifdef DEBUGHEAP
+    return DEBUGHEAP_PREFIX(av_malloc)(result, file, line);
+#else
+    return av_malloc(result);
+#endif
 }
 
-void *av_mallocz_array(size_t nmemb, size_t size)
+void *DEBUGHEAP_PREFIX(av_mallocz_array)(size_t nmemb, size_t size DEBUGHEAP_ARG)
 {
-    if (!size || nmemb >= INT_MAX / size)
+    size_t result;
+    if (av_size_mult(nmemb, size, &result) < 0)
         return NULL;
-    return av_mallocz(nmemb * size);
+#ifdef DEBUGHEAP
+    return DEBUGHEAP_PREFIX(av_mallocz)(result, file, line);
+#else
+    return av_mallocz(result);
+#endif
 }
 
-void *av_realloc_array(void *ptr, size_t nmemb, size_t size)
+void *DEBUGHEAP_PREFIX(av_realloc_array)(void *ptr, size_t nmemb, size_t size DEBUGHEAP_ARG)
 {
-    if (!size || nmemb >= INT_MAX / size)
+    size_t result;
+    if (av_size_mult(nmemb, size, &result) < 0)
         return NULL;
-    return av_realloc(ptr, nmemb * size);
+#ifdef DEBUGHEAP
+    return DEBUGHEAP_PREFIX(av_realloc)(ptr, result, file, line);
+#else
+    return av_realloc(ptr, result);
+#endif
 }
 
-int av_reallocp_array(void *ptr, size_t nmemb, size_t size)
+int DEBUGHEAP_PREFIX(av_reallocp_array)(void *ptr, size_t nmemb, size_t size DEBUGHEAP_ARG)
 {
     void *val;
 
     memcpy(&val, ptr, sizeof(val));
+#ifdef DEBUGHEAP
+    val = DEBUGHEAP_PREFIX(av_realloc_f)(val, nmemb, size, file, line);
+#else
     val = av_realloc_f(val, nmemb, size);
+#endif
     memcpy(ptr, &val, sizeof(val));
     if (!val && nmemb && size)
         return AVERROR(ENOMEM);
@@ -215,8 +338,12 @@ int av_reallocp_array(void *ptr, size_t nmemb, size_t size)
     return 0;
 }
 
-void av_free(void *ptr)
+void av_free(void *arg_ptr)
 {
+  void *ptr = arg_ptr;
+#ifdef DEBUGHEAP
+  ptr = removefromlist(ptr);
+#endif
 #if HAVE_ALIGNED_MALLOC
     _aligned_free(ptr);
 #else
@@ -230,37 +357,51 @@ void av_freep(void *arg)
 
     memcpy(&val, arg, sizeof(val));
     memcpy(arg, &(void *){ NULL }, sizeof(val));
+
     av_free(val);
 }
 
-void *av_mallocz(size_t size)
+void *DEBUGHEAP_PREFIX(av_mallocz)(size_t size DEBUGHEAP_ARG)
 {
+#ifdef DEBUGHEAP
+  void *ptr = DEBUGHEAP_PREFIX(av_malloc)(size, file, line);
+#else
     void *ptr = av_malloc(size);
+#endif
     if (ptr)
         memset(ptr, 0, size);
     return ptr;
 }
 
-void *av_calloc(size_t nmemb, size_t size)
+void *DEBUGHEAP_PREFIX(av_calloc)(size_t nmemb, size_t size DEBUGHEAP_ARG)
 {
-    if (size <= 0 || nmemb >= INT_MAX / size)
+    size_t result;
+    if (av_size_mult(nmemb, size, &result) < 0)
         return NULL;
-    return av_mallocz(nmemb * size);
+#ifdef DEBUGHEAP
+    return DEBUGHEAP_PREFIX(av_mallocz)(result, file, line);
+#else
+    return av_mallocz(result);
+#endif
 }
 
-char *av_strdup(const char *s)
+char *DEBUGHEAP_PREFIX(av_strdup)(const char *s DEBUGHEAP_ARG)
 {
     char *ptr = NULL;
     if (s) {
         size_t len = strlen(s) + 1;
+#ifdef DEBUGHEAP
+        ptr = DEBUGHEAP_PREFIX(av_realloc)(NULL, len, file, line);
+#else
         ptr = av_realloc(NULL, len);
+#endif
         if (ptr)
             memcpy(ptr, s, len);
     }
     return ptr;
 }
 
-char *av_strndup(const char *s, size_t len)
+char *DEBUGHEAP_PREFIX(av_strndup)(const char *s, size_t len DEBUGHEAP_ARG)
 {
     char *ret = NULL, *end;
 
@@ -271,7 +412,11 @@ char *av_strndup(const char *s, size_t len)
     if (end)
         len = end - s;
 
+#ifdef DEBUGHEAP
+    ret = DEBUGHEAP_PREFIX(av_realloc)(NULL, len + 1, file, line);
+#else
     ret = av_realloc(NULL, len + 1);
+#endif
     if (!ret)
         return NULL;
 
@@ -280,36 +425,58 @@ char *av_strndup(const char *s, size_t len)
     return ret;
 }
 
-void *av_memdup(const void *p, size_t size)
+void *DEBUGHEAP_PREFIX(av_memdup)(const void *p, size_t size DEBUGHEAP_ARG)
 {
     void *ptr = NULL;
     if (p) {
+#ifdef DEBUGHEAP
+      ptr = DEBUGHEAP_PREFIX(av_malloc)(size, file, line);
+#else
         ptr = av_malloc(size);
+#endif
         if (ptr)
             memcpy(ptr, p, size);
     }
     return ptr;
 }
 
-int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem)
+int DEBUGHEAP_PREFIX(av_dynarray_add_nofree)(void *tab_ptr, int *nb_ptr, void *elem DEBUGHEAP_ARG)
 {
     void **tab;
     memcpy(&tab, tab_ptr, sizeof(tab));
-
+#ifdef DEBUGHEAP
     FF_DYNARRAY_ADD(INT_MAX, sizeof(*tab), tab, *nb_ptr, {
         tab[*nb_ptr] = elem;
         memcpy(tab_ptr, &tab, sizeof(tab));
     }, {
         return AVERROR(ENOMEM);
-    });
+      }, file, line);
+#else
+    FF_DYNARRAY_ADD(INT_MAX, sizeof(*tab), tab, *nb_ptr, {
+        tab[*nb_ptr] = elem;
+        memcpy(tab_ptr, &tab, sizeof(tab));
+    }, {
+        return AVERROR(ENOMEM);
+      });
+#endif
+    
     return 0;
 }
 
-void av_dynarray_add(void *tab_ptr, int *nb_ptr, void *elem)
+void DEBUGHEAP_PREFIX(av_dynarray_add)(void *tab_ptr, int *nb_ptr, void *elem DEBUGHEAP_ARG)
 {
     void **tab;
     memcpy(&tab, tab_ptr, sizeof(tab));
 
+#ifdef DEBUGHEAP
+    FF_DYNARRAY_ADD(INT_MAX, sizeof(*tab), tab, *nb_ptr, {
+        tab[*nb_ptr] = elem;
+        memcpy(tab_ptr, &tab, sizeof(tab));
+    }, {
+        *nb_ptr = 0;
+        av_freep(tab_ptr);
+      },file, line);
+#else
     FF_DYNARRAY_ADD(INT_MAX, sizeof(*tab), tab, *nb_ptr, {
         tab[*nb_ptr] = elem;
         memcpy(tab_ptr, &tab, sizeof(tab));
@@ -317,13 +484,26 @@ void av_dynarray_add(void *tab_ptr, int *nb_ptr, void *elem)
         *nb_ptr = 0;
         av_freep(tab_ptr);
     });
+#endif
 }
 
-void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size,
-                       const uint8_t *elem_data)
+void *DEBUGHEAP_PREFIX(av_dynarray2_add)(void **tab_ptr, int *nb_ptr, size_t elem_size,
+                       const uint8_t *elem_data DEBUGHEAP_ARG)
 {
     uint8_t *tab_elem_data = NULL;
 
+#ifdef DEBUGHEAP
+    FF_DYNARRAY_ADD(INT_MAX, elem_size, *tab_ptr, *nb_ptr, {
+        tab_elem_data = (uint8_t *)*tab_ptr + (*nb_ptr) * elem_size;
+        if (elem_data)
+            memcpy(tab_elem_data, elem_data, elem_size);
+        else if (CONFIG_MEMORY_POISONING)
+            memset(tab_elem_data, FF_MEMORY_POISON, elem_size);
+    }, {
+        av_freep(tab_ptr);
+        *nb_ptr = 0;
+      }, file, line);
+#else
     FF_DYNARRAY_ADD(INT_MAX, elem_size, *tab_ptr, *nb_ptr, {
         tab_elem_data = (uint8_t *)*tab_ptr + (*nb_ptr) * elem_size;
         if (elem_data)
@@ -334,6 +514,7 @@ void *av_dynarray2_add(void **tab_ptr, int *nb_ptr, size_t elem_size,
         av_freep(tab_ptr);
         *nb_ptr = 0;
     });
+#endif
     return tab_elem_data;
 }
 
@@ -399,6 +580,18 @@ static void fill32(uint8_t *dst, int len)
 {
     uint32_t v = AV_RN32(dst - 4);
 
+#if HAVE_FAST_64BIT
+    uint64_t v2= v + ((uint64_t)v<<32);
+    while (len >= 32) {
+        AV_WN64(dst   , v2);
+        AV_WN64(dst+ 8, v2);
+        AV_WN64(dst+16, v2);
+        AV_WN64(dst+24, v2);
+        dst += 32;
+        len -= 32;
+    }
+#endif
+
     while (len >= 4) {
         AV_WN32(dst, v);
         dst += 4;
@@ -461,19 +654,23 @@ void av_memcpy_backptr(uint8_t *dst, int back, int cnt)
     }
 }
 
-void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size)
+void *DEBUGHEAP_PREFIX(av_fast_realloc)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG)
 {
     if (min_size <= *size)
         return ptr;
 
-    if (min_size > max_alloc_size - 32) {
+    if (min_size > max_alloc_size) {
         *size = 0;
         return NULL;
     }
 
-    min_size = FFMIN(max_alloc_size - 32, FFMAX(min_size + min_size / 16 + 32, min_size));
+    min_size = FFMIN(max_alloc_size, FFMAX(min_size + min_size / 16 + 32, min_size));
 
+#ifdef DEBUGHEAP
+    ptr = DEBUGHEAP_PREFIX(av_realloc)(ptr, min_size, file, line);
+#else
     ptr = av_realloc(ptr, min_size);
+#endif
     /* we could set this to the unmodified min_size but this is safer
      * if the user lost the ptr and uses NULL now
      */
@@ -485,12 +682,33 @@ void *av_fast_realloc(void *ptr, unsigned int *size, size_t min_size)
     return ptr;
 }
 
-void av_fast_malloc(void *ptr, unsigned int *size, size_t min_size)
+void DEBUGHEAP_PREFIX(av_fast_malloc)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG)
 {
+#ifdef DEBUGHEAP
+  ff_fast_malloc(ptr, size, min_size, 0, file, line);
+#else
     ff_fast_malloc(ptr, size, min_size, 0);
+#endif
 }
 
-void av_fast_mallocz(void *ptr, unsigned int *size, size_t min_size)
+void DEBUGHEAP_PREFIX(av_fast_mallocz)(void *ptr, unsigned int *size, size_t min_size DEBUGHEAP_ARG)
 {
+#ifdef DEBUGHEAP
+  ff_fast_malloc(ptr, size, min_size, 1, file, line);
+#else
     ff_fast_malloc(ptr, size, min_size, 1);
+#endif
 }
+
+#ifdef DEBUGHEAP
+void av_mem_traverse(void (*callback)(const char *file, int line, size_t size))
+{
+  lock_list();
+  memheadertype *pcur = top;
+  while (pcur != NULL) {
+    callback(pcur->file, (int) pcur->line, pcur->size);
+    pcur = pcur->next;
+  }
+  unlock_list();
+}
+#endif
